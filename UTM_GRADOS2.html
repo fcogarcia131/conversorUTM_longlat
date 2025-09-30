@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conversor UTM → Google Maps</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.1/proj4.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 16px;
+      margin: 0;
+      background-color: #f8f9fa;
+      color: #333;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      margin-top: 0;
+      color: #2c3e50;
+      text-align: center;
+    }
+
+    p {
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 20px;
+      font-size: 1.1rem;
+    }
+
+    input, select {
+      padding: 14px;
+      font-size: 1.1rem;
+      width: 100%;
+      margin-top: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      background-color: white;
+    }
+
+    button {
+      padding: 16px;
+      font-size: 1.15rem;
+      width: 100%;
+      margin-top: 20px;
+      background-color: #28a745; /* Verde */
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+
+    button:hover {
+      background-color: #218838;
+    }
+
+    .error {
+      color: #d32f2f;
+      margin-top: 12px;
+      font-weight: bold;
+      font-size: 1.05rem;
+    }
+
+    .resultado {
+      margin-top: 24px;
+      padding: 18px;
+      background-color: #e8f4f8;
+      border-left: 4px solid #3498db;
+      font-family: monospace;
+      font-size: 1.15rem;
+      border-radius: 8px;
+      display: none;
+    }
+
+    .coord {
+      margin: 10px 0;
+      word-break: break-all;
+    }
+
+    code {
+      background: #eee;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 1.05rem;
+    }
+
+    /* Mejor espaciado en móviles pequeños */
+    @media (max-width: 480px) {
+      body {
+        padding: 12px;
+      }
+      h2 {
+        font-size: 1.4rem;
+      }
+      input, select, button {
+        padding: 16px;
+        font-size: 1.2rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Conversor UTM → Lat/Lon + Google Maps</h2>
+    <p>Ingresa las coordenadas UTM en formato: <code>X; Y</code> (con coma decimal)</p>
+    <p>Ejemplo: <code>751584,6358; 4430240,783</code></p>
+
+    <label for="utmInput">Coordenadas x, y:</label>
+    <input type="text" id="utmInput" placeholder="Ej: 751584,6358; 4430240,783">
+
+    <label for="utmZone">Zona UTM:</label>
+    <select id="utmZone">
+      <option value="30" selected>30</option>
+      <option value="31">31</option>
+      <option value="29">29</option>
+      <option value="28">28</option>
+      <option value="32">32</option>
+      <option value="17">17</option>
+      <option value="18">18</option>
+      <option value="19">19</option>
+      <option value="20">20</option>
+      <option value="21">21</option>
+      <option value="22">22</option>
+      <option value="23">23</option>
+      <option value="24">24</option>
+      <option value="25">25</option>
+      <option value="26">26</option>
+      <option value="27">27</option>
+      <option value="33">33</option>
+      <option value="34">34</option>
+      <option value="35">35</option>
+      <option value="36">36</option>
+      <option value="37">37</option>
+      <option value="38">38</option>
+      <option value="39">39</option>
+      <option value="40">40</option>
+      <option value="41">41</option>
+      <option value="42">42</option>
+      <option value="43">43</option>
+      <option value="44">44</option>
+      <option value="45">45</option>
+      <option value="46">46</option>
+      <option value="47">47</option>
+      <option value="48">48</option>
+      <option value="49">49</option>
+      <option value="50">50</option>
+      <option value="51">51</option>
+      <option value="52">52</option>
+      <option value="53">53</option>
+      <option value="54">54</option>
+      <option value="55">55</option>
+      <option value="56">56</option>
+      <option value="57">57</option>
+      <option value="58">58</option>
+      <option value="59">59</option>
+      <option value="60">60</option>
+    </select>
+
+    <label for="hemisferio">Hemisferio:</label>
+    <select id="hemisferio">
+      <option value="N" selected>Norte (N)</option>
+      <option value="S">Sur (S)</option>
+    </select>
+
+    <button onclick="convertir()">Convertir</button>
+
+    <div id="error" class="error"></div>
+
+    <div id="resultado" class="resultado">
+      <div class="coord"><strong>Latitud:</strong> <span id="latitud"></span></div>
+      <div class="coord"><strong>Longitud:</strong> <span id="longitud"></span></div>
+      <button onclick="abrirGoogleMaps()" style="margin-top: 16px;">Abrir en Google Maps</button>
+    </div>
+  </div>
+
+  <script>
+    let coordenadasGeo = null;
+
+    function convertir() {
+      const input = document.getElementById('utmInput').value.trim();
+      const errorDiv = document.getElementById('error');
+      const resultadoDiv = document.getElementById('resultado');
+      errorDiv.textContent = '';
+      resultadoDiv.style.display = 'none';
+
+      const utmZone = parseInt(document.getElementById('utmZone').value);
+      const hemisferio = document.getElementById('hemisferio').value;
+
+      if (!utmZone || isNaN(utmZone) || utmZone < 1 || utmZone > 60) {
+        errorDiv.textContent = "Error: Zona UTM inválida.";
+        return;
+      }
+
+      const epsgCode = hemisferio === 'S' ? `327${utmZone.toString().padStart(2, '0')}` : `326${utmZone.toString().padStart(2, '0')}`;
+      const utmProjection = `EPSG:${epsgCode}`;
+
+      if (!proj4.defs(utmProjection)) {
+        proj4.defs(utmProjection, `+proj=utm +zone=${utmZone} +${hemisferio === 'S' ? 'south' : 'north'} +ellps=WGS84 +datum=WGS84 +units=m +no_defs`);
+      }
+
+      const partes = input.split(';').map(p => p.trim());
+      if (partes.length !== 2) {
+        errorDiv.textContent = "Error: Formato incorrecto. Usa 'X; Y'";
+        return;
+      }
+
+      let xStr = partes[0].replace(/,/g, '.');
+      let yStr = partes[1].replace(/,/g, '.');
+
+      const x = parseFloat(xStr);
+      const y = parseFloat(yStr);
+
+      if (isNaN(x) || isNaN(y)) {
+        errorDiv.textContent = "Error: Coordenadas no válidas.";
+        return;
+      }
+
+      try {
+        const [lon, lat] = proj4(utmProjection, 'EPSG:4326', [x, y]);
+        const latStr = lat.toFixed(10);
+        const lonStr = lon.toFixed(10);
+
+        coordenadasGeo = { lat: latStr, lon: lonStr };
+
+        document.getElementById('latitud').textContent = latStr;
+        document.getElementById('longitud').textContent = lonStr;
+        resultadoDiv.style.display = 'block';
+      } catch (e) {
+        errorDiv.textContent = "Error en la conversión: " + (e.message || e);
+      }
+    }
+
+    function abrirGoogleMaps() {
+      if (!coordenadasGeo) return;
+      const url = `https://www.google.com/maps?q=${coordenadasGeo.lat},${coordenadasGeo.lon}`;
+      window.open(url, '_blank');
+    }
+  </script>
+</body>
+</html>
